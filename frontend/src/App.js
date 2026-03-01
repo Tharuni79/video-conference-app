@@ -9,6 +9,7 @@ function App() {
 
   useEffect(() => {
     const start = async () => {
+
       socket.current = new WebSocket(`ws://localhost:8000/ws/${roomId}`);
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -18,7 +19,13 @@ function App() {
 
       localVideoRef.current.srcObject = stream;
 
-      peerConnection.current = new RTCPeerConnection();
+      peerConnection.current = new RTCPeerConnection({
+  iceServers: [
+    {
+      urls: "stun:stun.l.google.com:19302"
+    }
+  ]
+});
 
       stream.getTracks().forEach(track => {
         peerConnection.current.addTrack(track, stream);
@@ -41,7 +48,7 @@ function App() {
         const data = JSON.parse(message.data);
 
         if (data.type === "offer") {
-          await peerConnection.current.setRemoteDescription(data.offer);
+          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.offer));
           const answer = await peerConnection.current.createAnswer();
           await peerConnection.current.setLocalDescription(answer);
 
@@ -52,22 +59,25 @@ function App() {
         }
 
         if (data.type === "answer") {
-          await peerConnection.current.setRemoteDescription(data.answer);
+          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.answer));
         }
 
         if (data.type === "ice") {
-          await peerConnection.current.addIceCandidate(data.candidate);
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate));
         }
       };
 
       socket.current.onopen = async () => {
-        const offer = await peerConnection.current.createOffer();
-        await peerConnection.current.setLocalDescription(offer);
+        // Wait 2 seconds before creating offer
+        setTimeout(async () => {
+          const offer = await peerConnection.current.createOffer();
+          await peerConnection.current.setLocalDescription(offer);
 
-        socket.current.send(JSON.stringify({
-          type: "offer",
-          offer: offer
-        }));
+          socket.current.send(JSON.stringify({
+            type: "offer",
+            offer: offer
+          }));
+        }, 2000);
       };
     };
 
